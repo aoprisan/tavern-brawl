@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tavern Brawl</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --oak: #1B130E;
+    --panel: #281C14;
+    --panel-2: #33241A;
+    --line: #4A3526;
+    --ink: #F3E6CB;
+    --ink-dim: #B9A588;
+    --ink-faint: #7E6B54;
+    --ale: #E0A030;
+    --ember: #C8452B;
+    --sage: #86B583;
+    --coin: #F2C14E;
+    --radius: 6px;
+    font-size: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    display: flex;
+    flex-direction: column;
+    background: var(--oak);
+    color: var(--ink);
+    font-family: "Zilla Slab", Georgia, serif;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+  }
+  button, input {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    background: var(--ale);
+    color: var(--oak);
+    border: 0;
+    border-radius: var(--radius);
+    padding: .55em 1.1em;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .45; cursor: default; }
+  button.quiet { background: var(--panel-2); color: var(--ink); }
+  :focus-visible { outline: 3px solid var(--coin); outline-offset: 2px; }
+  .hidden { display: none !important; }
+
+  /* banner shown in both views when the referee is the keyword mock */
+  .mock-banner {
+    flex: none;
+    background: var(--ember);
+    color: #fff;
+    text-align: center;
+    padding: .4em 1em;
+    font-weight: 700;
+    letter-spacing: .01em;
+  }
+
+  /* ---------- screen ---------- */
+  .screen {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 20px;
+    gap: 14px;
+  }
+  .screen header {
+    display: flex;
+    align-items: baseline;
+    gap: 22px;
+    padding-top: 18px;
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 12px;
+  }
+  .screen h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+  .screen .round {
+    font-size: 1.4rem;
+    color: var(--ink-dim);
+  }
+  .screen .round strong { color: var(--ink); font-weight: 500; }
+  .screen .clock {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--ale);
+    min-width: 4.2ch;
+  }
+  .screen .clock.low { color: var(--ember); }
+  .screen header .spacer { flex: 1; }
+  .screen .join-hint { color: var(--ink-dim); font-size: 1.1rem; }
+  .screen .join-hint code { font-family: inherit; color: var(--ink); font-weight: 500; }
+  .screen .referee-name { color: var(--ink-faint); font-size: .95rem; }
+
+  .screen main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(320px, .9fr);
+    gap: 18px;
+    min-height: 0;
+  }
+  .log {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .log .empty {
+    color: var(--ink-faint);
+    font-size: 1.4rem;
+    font-style: italic;
+    padding: 30px 6px;
+  }
+
+  .event {
+    background: var(--panel);
+    border-left: 5px solid var(--line);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 16px;
+    transition: opacity .3s;
+  }
+  .event .move, .event .verdict, .event .effects { grid-column: 1; }
+  .event .move { font-size: 1.15rem; }
+  .event .move b { font-weight: 700; color: var(--ale); }
+  .event .move q { quotes: "“" "”"; font-style: italic; }
+  .event .verdict { color: var(--ink-dim); font-size: 1.05rem; }
+  .event .verdict .k { color: var(--ink); font-weight: 500; }
+  .event .effects { font-size: 1.05rem; margin-top: 2px; }
+  .event .effects .dmg { color: var(--ember); font-weight: 700; }
+  .event .effects .heal { color: var(--sage); font-weight: 700; }
+  .event .effects .gold { color: var(--coin); font-weight: 700; }
+  .event .latency {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: start;
+    text-align: right;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .event .latency small { display: block; font-size: .8rem; font-weight: 400; color: var(--ink-faint); margin-top: 4px; }
+  .event .conf { color: var(--ink-faint); }
+  .event .conf.weak { color: var(--ember); }
+
+  /* the newest event is the loud one; older ones recede */
+  .event.latest {
+    border-left-color: var(--ale);
+    padding: 18px 20px;
+  }
+  .event.latest .move { font-size: 1.75rem; line-height: 1.2; }
+  .event.latest .verdict, .event.latest .effects { font-size: 1.3rem; }
+  .event.latest .latency { font-size: 2.6rem; }
+  .event.old { opacity: .55; }
+  .event.older { opacity: .3; }
+
+  .event.pending { border-left-color: var(--ink-faint); }
+  .event.pending .verdict { font-style: italic; }
+  .event.pending .latency { color: var(--ink-faint); }
+  .event.hesitated { border-left-color: var(--coin); }
+  .event.hesitated .verdict { color: var(--coin); font-style: italic; }
+  .event.cancelled { border-left-color: var(--ember); }
+  .event.cancelled .verdict { color: var(--ember); }
+  .event.failed { border-left-color: var(--ember); background: #3A1B14; }
+  .event.failed .verdict { color: #FFB4A4; }
+
+  aside {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+  }
+  .card {
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+  }
+  .card h2 {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    font-weight: 500;
+    color: var(--ink-dim);
+  }
+
+  /* the referee: eyes that widen while judging and squint on hesitation */
+  .referee {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 16px;
+    align-items: center;
+  }
+  .face {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    background: var(--panel-2);
+    border: 3px solid var(--line);
+    position: relative;
+  }
+  .eye {
+    position: absolute;
+    top: 38px;
+    width: 22px; height: 16px;
+    background: var(--ink);
+    border-radius: 50%;
+    transition: height .25s, top .25s, transform .25s;
+  }
+  .eye.l { left: 20px; } .eye.r { right: 20px; }
+  .eye::after {
+    content: "";
+    position: absolute;
+    left: 7px; top: 3px;
+    width: 8px; height: 10px;
+    border-radius: 50%;
+    background: var(--oak);
+  }
+  .face.judging .eye { height: 22px; top: 34px; }
+  .face.judging .eye::after { animation: look .7s ease-in-out infinite alternate; }
+  @keyframes look { from { left: 3px; } to { left: 11px; } }
+  .face.squint .eye { height: 5px; top: 44px; transform: rotate(-6deg); }
+  .face.squint .eye.r { transform: rotate(6deg); }
+  .face.squint .eye::after { display: none; }
+  .face.down { border-color: var(--ember); }
+  .face.down .eye { height: 3px; top: 45px; }
+  .face.down .eye::after { display: none; }
+  @media (prefers-reduced-motion: reduce) { .face.judging .eye::after { animation: none; } }
+  .referee .status { font-size: 1.5rem; font-weight: 700; line-height: 1.1; }
+  .referee .status.squint { color: var(--coin); }
+  .referee .status.down { color: var(--ember); }
+  .referee .sub { color: var(--ink-dim); margin-top: 4px; }
+  .referee .sub.err { color: #FFB4A4; }
+
+  .counters {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px 14px;
+  }
+  .counters > div:not(.price) { display: flex; flex-direction: column; }
+  .counters .n { font-size: 2rem; font-weight: 700; line-height: 1.05; }
+  .counters .n small { font-size: 1rem; font-weight: 400; color: var(--ink-dim); margin-left: 2px; }
+  .counters .l { color: var(--ink-dim); font-size: .95rem; }
+  .counters .price { grid-column: 1 / -1; color: var(--ink-faint); font-size: .9rem; margin-top: 2px; }
+
+  table.board { width: 100%; border-collapse: collapse; }
+  .board td, .board th { padding: 5px 4px; text-align: left; font-weight: 400; }
+  .board th { color: var(--ink-dim); font-size: .9rem; border-bottom: 1px solid var(--line); }
+  .board td.num, .board th.num { text-align: right; }
+  .board tr.down td { color: var(--ink-faint); text-decoration: line-through; }
+  .board .name { font-weight: 500; font-size: 1.1rem; }
+  .hp { display: inline-flex; gap: 2px; vertical-align: middle; margin-right: 8px; }
+  .hp i { width: 7px; height: 14px; background: var(--ember); border-radius: 1px; display: block; }
+  .hp i.off { background: var(--line); }
+  .board .gold { color: var(--coin); }
+  .board .tag { color: var(--ink-faint); font-size: .85rem; margin-left: 6px; }
+  .board-empty { color: var(--ink-faint); font-style: italic; }
+
+  .controls { display: flex; gap: 10px; align-items: center; margin-top: auto; }
+  .controls .hint { color: var(--ink-dim); }
+
+  .final {
+    position: fixed; inset: 0;
+    background: rgba(27, 19, 14, .92);
+    display: grid; place-items: center;
+    padding: 24px;
+  }
+  .final .card { min-width: 420px; max-width: 640px; padding: 26px 32px; }
+  .final h2 { font-size: 2rem; font-weight: 700; color: var(--ink); margin-bottom: 14px; }
+  .final .board .name { font-size: 1.4rem; }
+  .final .winner td { color: var(--ale); }
+  .final .controls { margin-top: 18px; }
+
+  /* ---------- phone ---------- */
+  .phone {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 18px 16px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 100%;
+  }
+  .phone h1 { margin: 0; font-size: 1.7rem; }
+  .phone .you { color: var(--ink-dim); font-size: 1.05rem; }
+  .phone .you b { color: var(--ink); font-weight: 500; }
+  .phone form { display: flex; gap: 8px; }
+  .phone input {
+    flex: 1;
+    background: var(--panel);
+    border: 2px solid var(--line);
+    border-radius: var(--radius);
+    padding: .7em .8em;
+    font-size: 1.1rem;
+    min-width: 0;
+  }
+  .phone input::placeholder { color: var(--ink-faint); }
+  .phone .status {
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    font-size: 1.25rem;
+    min-height: 3.6em;
+  }
+  .phone .status.hesitated { color: var(--coin); font-style: italic; border-left: 5px solid var(--coin); }
+  .phone .status.rejected { color: #FFB4A4; }
+  .phone .status.pending { color: var(--ink-dim); font-style: italic; }
+  .phone .me { display: flex; gap: 22px; font-size: 1.3rem; }
+  .phone .me .gold { color: var(--coin); }
+  .phone .me .hp { margin: 0 6px 0 0; }
+  .phone .round-line { color: var(--ink-dim); }
+  .phone .round-line .clock { color: var(--ale); font-weight: 700; }
+  .phone .history { display: flex; flex-direction: column; gap: 6px; color: var(--ink-dim); }
+  .phone .history div { border-left: 3px solid var(--line); padding-left: 10px; }
+  .phone .history div.hesitated { border-left-color: var(--coin); }
+  .phone .history q { font-style: italic; color: var(--ink); quotes: "“" "”"; }
+  .phone .examples { color: var(--ink-faint); font-size: .95rem; }
+  .phone .examples span { color: var(--ink-dim); font-style: italic; }
+  .phone .connection { color: var(--ink-faint); font-size: .9rem; margin-top: auto; }
+</style>
+</head>
+<body>
+
+<div id="mock" class="mock-banner hidden">Mock referee — not Jev. Keyword rules with fake latency.</div>
+
+<!-- ============ screen (/screen) ============ -->
+<div id="screen" class="screen hidden">
+  <header>
+    <h1>Tavern Brawl</h1>
+    <div class="round">Round <strong id="s-round">–</strong></div>
+    <div class="clock" id="s-clock">1:00</div>
+    <div class="spacer"></div>
+    <div class="join-hint">Join from your phone at <code id="s-url"></code></div>
+    <div class="referee-name" id="s-referee"></div>
+  </header>
+  <main>
+    <section class="log" id="s-log" aria-live="polite">
+      <div class="empty" id="s-empty">Waiting for the first move. Type anything on your phone: throw a chair, hide, bribe the referee.</div>
+    </section>
+    <aside>
+      <div class="card referee">
+        <div class="face" id="s-face"><div class="eye l"></div><div class="eye r"></div></div>
+        <div>
+          <div class="status" id="s-status">The referee is watching</div>
+          <div class="sub" id="s-sub">One Jev call per move: kind, target, force, rule-break.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Referee tally</h2>
+        <div class="counters">
+          <div><span class="n" id="c-judged">0</span><span class="l">moves judged</span></div>
+          <div><span class="n" id="c-median">–<small>ms</small></span><span class="l">median latency</span></div>
+          <div><span class="n" id="c-spend">$0.000000</span><span class="l">total spend</span></div>
+          <div class="price" id="c-price">$0.042 per million input tokens, output free. <span id="c-tokens">0</span> input tokens so far.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Standings</h2>
+        <div id="s-board"></div>
+      </div>
+      <div class="controls">
+        <button id="s-start">Start round</button>
+        <span class="hint" id="s-hint">Rounds last 60 seconds.</span>
+      </div>
+    </aside>
+  </main>
+  <div id="s-final" class="final hidden">
+    <div class="card">
+      <h2 id="f-title">Round over</h2>
+      <div id="f-board"></div>
+      <div class="controls"><button id="f-start">Start next round</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ phone (/) ============ -->
+<div id="phone" class="phone hidden">
+  <h1>Tavern Brawl</h1>
+  <div id="p-join">
+    <form id="p-join-form">
+      <input id="p-name" placeholder="Your name" maxlength="20" autocomplete="nickname" required>
+      <button>Join the brawl</button>
+    </form>
+  </div>
+  <div id="p-play" class="hidden">
+    <div class="you">You are <b id="p-you"></b>. <span class="round-line" id="p-round"></span></div>
+    <div class="me"><span id="p-hp"></span><span class="gold" id="p-gold"></span></div>
+    <form id="p-move-form">
+      <input id="p-move" placeholder="What do you do?" maxlength="200" autocomplete="off" required>
+      <button id="p-send">Do it</button>
+    </form>
+    <div class="status" id="p-status">Type a move. Anything goes; the referee decides what it is.</div>
+    <div class="examples">Try: <span>throw a chair at Bob</span>, <span>hide under the table</span>, <span>bribe the referee</span>, <span>cast fireball at everyone</span>.</div>
+    <div class="history" id="p-history"></div>
+  </div>
+  <div class="connection" id="p-conn"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const isScreen = location.pathname.replace(/\/+$/, '') === '/screen';
+  const $ = (id) => document.getElementById(id);
+  document.getElementById(isScreen ? 'screen' : 'phone').classList.remove('hidden');
+
+  // ---- shared state ----
+  let policy = null;
+  let snapshot = null;
+  let secondsLeft = 0;
+  let ws = null;
+  let myName = sessionStorage.getItem('brawl-name') || null;
+  const pendingMoves = new Map(); // screen: seq → actor, while the referee is judging
+
+  function send(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => setConn('');
+    ws.onclose = () => { setConn('Connection lost, reconnecting…'); setTimeout(connect, 1200); };
+    ws.onmessage = (ev) => handle(JSON.parse(ev.data));
+  }
+
+  function setConn(text) {
+    const el = $('p-conn');
+    if (el) el.textContent = text;
+  }
+
+  function clock(s) {
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+
+  function hpBar(hp, max) {
+    let s = '<span class="hp" aria-label="' + hp + ' of ' + max + ' HP">';
+    for (let i = 0; i < max; i++) s += `<i class="${i < hp ? '' : 'off'}"></i>`;
+    return s + '</span>';
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function boardHtml(rows, big) {
+    if (!rows.length) return '<div class="board-empty">Nobody has joined yet.</div>';
+    const max = policy ? policy.start_hp : 10;
+    let h = '<table class="board"><tr><th></th><th>Brawler</th><th class="num">Gold</th><th class="num">Moves</th></tr>';
+    for (const r of rows) {
+      h += `<tr class="${r.alive ? '' : 'down'} ${big && r.rank === 1 ? 'winner' : ''}">
+        <td class="num">${r.rank}</td>
+        <td><span class="name">${esc(r.name)}</span>${r.alive ? '' : '<span class="tag">down</span>'}<br>${hpBar(r.hp, max)}<span>${r.hp} HP</span></td>
+        <td class="num gold">${r.gold}</td>
+        <td class="num">${r.moves_judged}</td></tr>`;
+    }
+    return h + '</table>';
+  }
+
+  function handle(msg) {
+    switch (msg.type) {
+      case 'welcome':
+        policy = msg.policy;
+        $('mock').classList.toggle('hidden', !msg.mock);
+        if (isScreen) {
+          $('s-referee').textContent = msg.referee;
+          $('s-log').querySelectorAll('.event').forEach((e) => e.remove());
+          for (const e of msg.snapshot.events || []) renderEvent(e);
+        } else if (myName) {
+          send({ type: 'join', name: myName }); // reconnect under the same name
+        }
+        applySnapshot(msg.snapshot);
+        break;
+      case 'snapshot': applySnapshot(msg); break;
+      case 'event': if (isScreen) renderEvent(msg); break;
+      case 'tick': secondsLeft = msg.seconds_left; renderClock(); break;
+      case 'round_started':
+        secondsLeft = msg.seconds;
+        if (isScreen) {
+          $('s-final').classList.add('hidden');
+          $('s-log').querySelectorAll('.event').forEach((e) => e.remove());
+          $('s-empty').classList.remove('hidden');
+          setFace('idle', 'The referee is watching', `Round ${msg.round}. Every move gets one Jev call.`);
+        } else {
+          $('p-status').textContent = `Round ${msg.round} has started. What do you do?`;
+          $('p-status').className = 'status';
+          $('p-history').innerHTML = '';
+        }
+        renderClock();
+        break;
+      case 'round_ended':
+        secondsLeft = 0;
+        if (isScreen) {
+          $('f-title').textContent = `Round ${msg.round} is over`;
+          $('f-board').innerHTML = boardHtml(msg.leaderboard, true);
+          $('s-final').classList.remove('hidden');
+        } else {
+          const me = msg.leaderboard.find((r) => r.name === myName);
+          $('p-status').textContent = me ? `Round over. You finished ${ordinal(me.rank)} with ${me.hp} HP and ${me.gold} gold.` : 'Round over.';
+          $('p-status').className = 'status';
+        }
+        renderClock();
+        break;
+      case 'joined':
+        myName = msg.name;
+        sessionStorage.setItem('brawl-name', myName);
+        $('p-join').classList.add('hidden');
+        $('p-play').classList.remove('hidden');
+        $('p-you').textContent = myName;
+        renderMe();
+        break;
+      case 'move_result': {
+        const text = msg.text;
+        const st = $('p-status');
+        st.textContent = msg.message;
+        st.className = 'status' + (msg.hesitated ? ' hesitated' : '');
+        const row = document.createElement('div');
+        row.className = msg.hesitated ? 'hesitated' : '';
+        row.innerHTML = `<q>${esc(text)}</q> — ${esc(msg.message)}`;
+        $('p-history').prepend(row);
+        while ($('p-history').children.length > 6) $('p-history').lastChild.remove();
+        $('p-send').disabled = false;
+        break;
+      }
+      case 'rejected':
+        if (isScreen) {
+          $('s-hint').textContent = msg.reason;
+        } else {
+          const st = $('p-status');
+          st.textContent = msg.reason;
+          st.className = 'status rejected';
+          $('p-send').disabled = false;
+        }
+        break;
+      case 'referee_down':
+        if (isScreen) setFace('down', 'The referee is down', `${msg.code}: ${msg.reason}`, true);
+        break;
+    }
+  }
+
+  function ordinal(n) { return n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : (n % 10 < 4 ? n % 10 : 0)]); }
+
+  function applySnapshot(s) {
+    snapshot = s;
+    secondsLeft = s.seconds_left;
+    if (isScreen) {
+      $('s-round').textContent = s.round || '–';
+      $('s-board').innerHTML = boardHtml(s.leaderboard, false);
+      $('c-judged').textContent = s.stats.moves_judged;
+      $('c-median').innerHTML = s.stats.moves_judged ? `${s.stats.median_latency_ms}<small>ms</small>` : '–<small>ms</small>';
+      $('c-spend').textContent = '$' + s.stats.spend_usd.toFixed(6);
+      $('c-tokens').textContent = s.stats.input_tokens.toLocaleString();
+      $('s-start').textContent = s.phase === 'lobby' ? 'Start round' : s.phase === 'running' ? 'Restart round' : 'Start next round';
+      if (s.phase === 'lobby') $('s-hint').textContent = s.players.length ? `${s.players.length} in the room. Rounds last ${policy.round_secs} seconds.` : `Rounds last ${policy.round_secs} seconds.`;
+      else if (s.phase === 'running') $('s-hint').textContent = `${s.players.filter((p) => p.hp > 0).length} standing`;
+      if (s.phase === 'ended' && $('s-final').classList.contains('hidden') && snapshot.round) {
+        $('f-title').textContent = `Round ${s.round} is over`;
+        $('f-board').innerHTML = boardHtml(s.leaderboard, true);
+        $('s-final').classList.remove('hidden');
+      }
+    } else {
+      renderMe();
+    }
+    renderClock();
+  }
+
+  function renderClock() {
+    if (isScreen) {
+      const c = $('s-clock');
+      c.textContent = snapshot && snapshot.phase === 'running' ? clock(secondsLeft) : clock(policy ? policy.round_secs : 60);
+      c.classList.toggle('low', snapshot && snapshot.phase === 'running' && secondsLeft <= 10);
+    } else if (snapshot) {
+      $('p-round').innerHTML = snapshot.phase === 'running'
+        ? `Round ${snapshot.round}, <span class="clock">${clock(secondsLeft)}</span> left.`
+        : snapshot.phase === 'lobby' ? 'Waiting for the screen to start the round.' : 'Round over. Waiting for the next one.';
+    }
+  }
+
+  function renderMe() {
+    if (!snapshot || !myName) return;
+    const me = snapshot.players.find((p) => p.name === myName);
+    if (!me) return;
+    $('p-hp').innerHTML = hpBar(me.hp, policy.start_hp) + `${me.hp} HP` + (me.defending ? ' <small>(guarding)</small>' : '') + (me.immunities ? ` <small>(${me.immunities} immunity)</small>` : '');
+    $('p-gold').textContent = `${me.gold} gold`;
+    if (me.hp <= 0) {
+      $('p-status').textContent = 'You are down for this round.';
+      $('p-status').className = 'status';
+    }
+    renderClock();
+  }
+
+  // ---- screen: event log and referee face ----
+  function setFace(state, status, sub, err) {
+    const face = $('s-face');
+    face.className = 'face ' + (state === 'idle' ? '' : state);
+    $('s-status').textContent = status;
+    $('s-status').className = 'status ' + (state === 'squint' || state === 'down' ? state : '');
+    $('s-sub').textContent = sub;
+    $('s-sub').className = 'sub' + (err ? ' err' : '');
+  }
+
+  function confSpan(c) {
+    const weak = c < policy.hesitation_confidence;
+    return `<span class="conf ${weak ? 'weak' : ''}">${Math.round(c * 100)}%</span>`;
+  }
+
+  function effectHtml(e) {
+    switch (e.type) {
+      case 'damage': return `<span class="dmg">${esc(e.target)} −${e.amount} HP</span>${e.halved ? ' (halved, they were guarding)' : ''}`;
+      case 'immune': return `${esc(e.target)} shrugs it off — a bribe bought immunity`;
+      case 'downed': return `<span class="dmg">${esc(e.target)} is down</span>`;
+      case 'defending': return `${esc(e.player)} braces for the next hit`;
+      case 'stole': return `<span class="gold">${esc(e.to)} takes ${e.gold} gold</span> from ${esc(e.from)}`;
+      case 'healed': return `<span class="heal">${esc(e.target)} +${e.amount} HP</span>`;
+      case 'bribed': return e.immunity ? `<span class="gold">${e.gold} gold</span> to the referee, one immunity granted` : 'no gold to bribe with';
+      case 'missed': return `misses: ${esc(e.reason)}`;
+      case 'nothing': return 'nothing happens';
+      default: return esc(JSON.stringify(e));
+    }
+  }
+
+  function renderEvent(ev) {
+    $('s-empty').classList.add('hidden');
+    const log = $('s-log');
+    let el = document.getElementById('ev-' + ev.seq);
+    const fresh = !el;
+    if (fresh) {
+      el = document.createElement('article');
+      el.id = 'ev-' + ev.seq;
+      log.prepend(el);
+    }
+    let cls = 'event';
+    let verdict = '';
+    let effects = '';
+    let latency = '<span class="latency">…<small>judging</small></span>';
+    if (!ev.outcome) {
+      cls += ' pending';
+      verdict = 'The referee is judging…';
+      pendingMoves.set(ev.seq, ev.actor);
+      setFace('judging', 'The referee is judging', `${ev.actor}'s move is with Jev.`);
+    } else {
+      pendingMoves.delete(ev.seq);
+      const v = ev.verdict;
+      if (v) {
+        const target = v.target.type === 'player' ? v.target.name : v.target.type === 'everyone' ? 'everyone' : 'no one';
+        verdict = `<span class="k">${esc(v.kind)}</span> ${confSpan(v.kind_confidence)} on <span class="k">${esc(target)}</span> ${confSpan(v.target_confidence)}, force <span class="k">${v.force.toFixed(1)}</span>, rule-break ${Math.round(v.breaks_rules * 100)}%`;
+        latency = `<span class="latency">${v.latency_ms}<small>ms, ${v.input_tokens} tokens</small></span>`;
+      }
+      const o = ev.outcome;
+      switch (o.type) {
+        case 'hesitated':
+          cls += ' hesitated';
+          effects = 'The referee squints… “say that again?” Nothing happens.';
+          setFace('squint', 'The referee squints', `Not sure what ${ev.actor} meant. Confidence under ${Math.round(policy.hesitation_confidence * 100)}%, so no ruling.`);
+          break;
+        case 'cancelled':
+          cls += ' cancelled';
+          effects = `Cancelled for cheating. ${ev.actor} loses ${o.gold_lost} gold.`;
+          setFace('idle', 'The referee is watching', `${ev.actor} tried to bend the rules.`);
+          break;
+        case 'applied':
+          effects = o.effects.map(effectHtml).join('; ');
+          setFace('idle', 'The referee is watching', `Ruled on ${ev.actor}'s move in ${ev.verdict ? ev.verdict.latency_ms : '?'} ms.`);
+          break;
+        case 'fizzled':
+          effects = `Nothing happens: ${esc(o.reason)}.`;
+          break;
+        case 'failed':
+          cls += ' failed';
+          verdict = `The referee could not rule: ${esc(o.reason)}`;
+          latency = '<span class="latency">–</span>';
+          break;
+      }
+      if (pendingMoves.size && o.type !== 'hesitated') {
+        const next = [...pendingMoves.values()].pop();
+        setFace('judging', 'The referee is judging', `${next}'s move is with Jev.`);
+      }
+    }
+    el.className = cls;
+    el.innerHTML = `<div class="move"><b>${esc(ev.actor)}</b> <q>${esc(ev.text)}</q></div>
+      <div class="verdict">${verdict}</div>
+      <div class="effects">${effects}</div>${latency}`;
+    // newest large, older fading; cap the log so the screen never scrolls
+    const items = log.querySelectorAll('.event');
+    items.forEach((it, i) => {
+      it.classList.remove('latest', 'old', 'older');
+      if (i === 0) it.classList.add('latest');
+      else if (i >= 6) it.classList.add('older');
+      else if (i >= 3) it.classList.add('old');
+      if (i >= 8) it.remove();
+    });
+  }
+
+  // ---- wiring ----
+  if (isScreen) {
+    $('s-url').textContent = location.origin + '/';
+    $('s-start').onclick = () => send({ type: 'start_round' });
+    $('f-start').onclick = () => send({ type: 'start_round' });
+  } else {
+    $('p-join-form').onsubmit = (e) => { e.preventDefault(); send({ type: 'join', name: $('p-name').value }); };
+    $('p-move-form').onsubmit = (e) => {
+      e.preventDefault();
+      const text = $('p-move').value.trim();
+      if (!text) return;
+      send({ type: 'move', text });
+      $('p-move').value = '';
+      $('p-status').textContent = 'The referee is judging…';
+      $('p-status').className = 'status pending';
+    };
+  }
+  connect();
+})();
+</script>
+</body>
+</html>
